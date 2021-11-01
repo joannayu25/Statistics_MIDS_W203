@@ -11,7 +11,7 @@ Public policy is focused on maximizing the well-being of the population and redu
 In this study, we will research the crime data for a selection of counties in North Carolina from the year 1987 to understand the determinants of crime and generate policy suggestions for the local or state governments.  
 
 ## About the Data
-The dataset was first used in a study by Cornwell and Trumball, researchers from the University of Georgia and West Virginia University. The data used for this analysis is a single cross-section of original data, but the original study was based on a multi-year panel. The authors used panel data methods and instrumental variables to control for some types of omitted variables. In this study, we are restricted to ordinary least squares regression so we aim for causal estimates, while clearly explaining how we think omitted variables may affect our conclusions.
+The dataset was first used in a study by Cornwell and Trumball, researchers from the University of Georgia and West Virginia University. The data used for this analysis is a single cross-section of original data, but the original study was based on a multi-year panel. The authors used panel data methods and instrumental variables to control for some types of omitted variables. In this study, we are restricted to ordinary least squares regression so we aim for causal estimates, while clearly explaining how we think omitted variables affects our conclusions.
 
 The dataset includes 25 variables that describe the various statistics of each county. The variables have been grouped by the following major categories: 
 
@@ -30,4 +30,4 @@ No. | Category | Fields
 Our final dataset contains 90 observations and 25 variables. In North Carolina, there is a total of 100 counties, thus our dataset covers 90% of all North Carolina. We must assume that the counties not included were selected at random, so our dataset is built from a random sample. If not, we know that there will be some biases in our results.
 
 ## Modeling Process and Conclusion
-Please see [paper](./DeSola_Tosaria_Yu_lab3_Final.pdf).
+Please see our [paper](./DeSola_Tosaria_Yu_lab3_Final.pdf).
