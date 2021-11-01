@@ -1,0 +1,118 @@
+---
+title: "Lab 3: Reducing Crime (Draft)"
+author: "Vinicio De Sola, Sam Tosaria, Joanna Yu (W203 Tuesday 4pm Fall 2018)"
+date: "11/27/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+
+Crime poses sustantial economic and intangible cost to society. Based on Bureau of Justice Statistics and FBI data, U.S. crime rates reached a broad peak between the 1970s through early 1990s and has declined significantly after that. The current crime rates are about the same as those in the 1960s. This is partly the result of a series of policies targeted at reducing crime rate. A good understanding of factors associated with crime is important for effective policymaking and resource allocation. 
+
+In this study, we will research the crime data for a selection of counties in North Caroline in 1987 to understand the determinants of crime and generate policy suggestions to the local government.  
+
+## Data Description
+The data set includes 25 variables that describe the various statistics of each county. All variables are numeric except for the probability of conviction variable, which is expressed as characters and will be converted to numbers. There are 97 observations but 6 are NA values. The variables have been grouped by the following major categories: 
+
+\begin{center}
+Table 1: Data Description
+\end{center}
+No. | Category | Fields
+--- | ------------------- | ----------------------------------------------------
+1 | Crime Rate | crmrte
+2 | Crime Punishment | prbarr, prbconv, prbpris, avgsen
+3 | Population | density, pctmin80, pctymle
+4 | Economic | taxpc
+5 | Geographic | county, west, central, urban
+6 | Income | wcon, wtuc, wtrd, wfir, wser, wmfg, wfed, wsta, wloc
+7 | Crime Type | mix
+8 | Law Enforcement | polpc
+9 | Time Period | year
+
+## Data Cleaning
+In the 97 observations, 6 consists of missing values in all fields. These rows have been removed. The "proconv" variable should be numeric but is expressed as characters. That has been converted to numbers.
+
+```{r cars}
+library(car)
+dfCrime <- read.csv('crime_v2.csv', stringsAsFactors = FALSE)
+dfCrime <- na.omit(dfCrime)
+dfCrime$prbconv <- as.numeric(dfCrime$prbconv)
+summary(dfCrime)
+```
+
+#Analysis of Key Relationships
+
+###Punishment and Crime
+In this section, we will investigate the effect of punishment on crime rate. Specifically, punishment is broken into two major categories: 
+
+1) Certainty of punishment, proxied by various ratio such as arrest:offense, conviction:arrest, and sentenced:conviction. We created a new variable that combines (by multiplying) the 3 certainty of punishment ratios to obtain the ratio for sentenced:offense to get a better sense of the extent in which criminals expect to be in prisoned after committing a crime. We expect the probability of arrest and the probability of being sentenced to be strong deterrants for crime.
+
+2) Severity of punishment, measured by the average sentence in days.
+
+
+```{r}
+dfCrime$prbPrisonToCrime = dfCrime$prbarr * dfCrime$prbconv * dfCrime$prbpris
+plot(dfCrime$prbarr, dfCrime$crmrte, xlab = "Probablility of Arrest", 
+     ylab = "Crime Rate", main = "Probability of Arrest vs Crime Rate")
+abline(lm(crmrte ~ prbarr, data=dfCrime))
+lm(crmrte ~ prbarr, data=dfCrime)
+summary(lm(crmrte ~ prbarr, data=dfCrime))$r.square
+
+plot(dfCrime$prbPrisonToCrime, dfCrime$crmrte, xlab = "Probablility of Being Sentenced", 
+     ylab = "Crime Rate", main = "Probability of Being Sentenced vs Crime Rate")
+abline(lm(crmrte ~ prbPrisonToCrime, data=dfCrime))
+lm(crmrte ~ prbPrisonToCrime, data=dfCrime)
+summary(lm(crmrte ~ prbPrisonToCrime, data=dfCrime))$r.square
+
+plot(dfCrime$avgsen, dfCrime$crmrte, xlab = "Average Sentence (Days)", 
+     ylab = "Crime Rate", main = "Average Sentence vs Crime Rate")
+abline(lm(crmrte ~ avgsen, data=dfCrime))
+lm(crmrte ~ avgsen, data=dfCrime)
+summary(lm(crmrte ~ avgsen, data=dfCrime))$r.square
+```
+
+```{r}
+plot(dfCrime$polpc, dfCrime$crmrte, xlab = "Police Per Capita", ylab = "Crime Rate", main = "Police Per Capita vs Crime Rate")
+
+```
+
+###Population and Crime
+In this section, we will investigate the effect of population and demographics on crime rate. 
+
+```{r}
+plot(dfCrime$density, dfCrime$crmrte, xlab = "Population Density (People Per Square Mile)", ylab = "Crime Rate", main = "Population Density vs Crime Rate")
+abline(lm(crmrte ~ density, data=dfCrime))
+lm(crmrte ~ density, data=dfCrime)
+summary(lm(crmrte ~ density, data=dfCrime))$r.square
+plot(dfCrime$pctmin80, dfCrime$crmrte, xlab = "Percent Minority, 1980", ylab = "Crime Rate", main = "Percent Minority, 1980")
+abline(lm(crmrte ~ pctmin80, data=dfCrime))
+lm(crmrte ~ pctmin80, data=dfCrime)
+summary(lm(crmrte ~ pctmin80, data=dfCrime))$r.square
+plot(dfCrime$pctymle, dfCrime$crmrte, xlab = "Percent Young Male (Age 15-24)", ylab = "Crime Rate", main = "Percent Young Male vs Crime Rate")
+abline(lm(crmrte ~ pctymle, data=dfCrime))
+lm(crmrte ~ pctymle, data=dfCrime)
+summary(lm(crmrte ~ pctymle, data=dfCrime))$r.square
+```
+
+I thought police coverage per capita would be a determinant of crime, but given the positive corelation, it could be the other way around - crime rate driving police coverage. 
+```{r}
+plot(dfCrime$polpc, dfCrime$crmrte, xlab = "Police Per Capita", ylab = "Crime Rate", main = "Police Per Capita vs Crime Rate")
+```
+
+Here is an interesting row of data with probability of arrest > 1. this county also has the lowest crime rate, longest average sentence, and most police per capita. 
+
+```{r}
+dfCrime[51,]
+```
+
+Additional variables that we would wish to collect?
+
+- Need average income (take average of the given income variables?)
+
+- Need a sense of proverty rate
+
+- Type of crime?

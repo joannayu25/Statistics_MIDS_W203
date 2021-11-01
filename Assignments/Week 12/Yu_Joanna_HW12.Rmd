@@ -1,0 +1,60 @@
+---
+title: "Homework 12"
+author: "Joanna Yu (W203 Tuesday 4pm Fall 2018)"
+date: "12/4/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Fit a linear model predicting the number of views (views), from the length of a video (length) and its average user rating (rate).
+```{r}
+library(stargazer)
+library(lmtest)
+library(sandwich)
+dfYoutube = read.delim("videos.txt")
+summary(dfYoutube)
+hist(dfYoutube$views, breaks=100)
+hist(log(dfYoutube$length))
+hist(dfYoutube$rate)
+model_view_len_rate = lm(views ~ log(length) + rate, data = dfYoutube)
+```
+
+2. Using diagnostic plots, background knowledge, and statistical tests, assess all 6 assumptions of the CLM. When an assumption is violated, state what response you will take.
+```{r}
+plot(model_view_len_rate)
+hist(model_view_len_rate$residuals, breaks=100)
+summary(model_view_len_rate)
+m = data.matrix(subset(dfYoutube, select = c("length", "rate")))
+(cor = cor(m))
+```
+CLM assumptions:
+
+1) Linearity - the model is a linear function.
+
+2) Random Sampling - it's unclear if the sample is random. From the summary of the "uploader" variable, the sample contains 56 videos from one of the users. With so many Youtube users, it seems unlikely that a random sample will pick 56 videos from a single user. But it could happen if the data is drawn from the early days of Youtube when there were fewer users. If random sampling is violated, there will be bias in the data.
+
+3) Multicollinearity - the two independent variables are not perfectly correlated.
+
+4) Zero-Conditional Mean - based on the Residuals vs Fitted plot, we can see that the spline curve is a straight line along 0. We have zero conditional mean. 
+
+5) Homoskedasticity - from the Scale-Location plot, we can see that heteroskedasticity is present. 
+
+6) Residual Normality - based on the residual plot, we can see that the residuals are not normally distributed. Based on the Normal QQ plot, the errors does not have a normal distribution. We have a violation of the normality of the errors. However, since the sample size is pretty big, we can still rely on asymptotics. 
+
+
+
+3. Generate a printout of your model coefficients, complete with standard errors that are valid given your diagnostics. Comment on both the practical and statistical significance of your coefficients.
+
+```{r}
+se.model_view_len_rate = sqrt(diag(vcovHC(model_view_len_rate)))
+
+stargazer(model_view_len_rate, type = "text", omit.stat = "f",
+          se = list(se.model_view_len_rate), star.cutoffs = c(0.05, 0.01, 0.005) )
+```
+
+
+Based on the p values, the coefficients seem statistically significant. I dont think this has high practical significance because the model is too naive with too many omitted variables. Also it's unclear if there is random sampling. 
+

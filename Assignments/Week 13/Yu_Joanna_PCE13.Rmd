@@ -1,0 +1,48 @@
+---
+title: "Unit 13 Pre Class"
+author: "Joanna Yu (W203 Tuesday 4pm Fall 2018)"
+date: "12/4/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(HistData)
+head(GaltonFamilies)
+summary(GaltonFamilies)
+plot(GaltonFamilies$father, GaltonFamilies$childHeight)
+```
+
+Q1. The gender variable reports the child’s gender. The linear model allows us to test the simple hypothesis that female children are taller than males. In the language of regression, female would be called the omitted category or excluded category. Define an indicator variable and use it to test the hypothesis described above. [Note: R will also accept factor variables as arguments to linear models, and these can be quite usefull.] Describe your results carefully.
+```{r}
+GaltonFamilies$isFemale = GaltonFamilies$gender == 'female'
+model_fheight=lm(childHeight ~ father + isFemale, data = GaltonFamilies)
+plot(model_fheight)
+summary(model_fheight)
+```
+The result suggests that female children are actually shorter than male children.
+
+
+Q2. Linear regression also allows us to test a different sort of hypothesis - is the relationship between parent’s height and child’s height different for female than for male children. Specify a model to test this hypothesis. Remember, the model should include not only the interaction, but also both of the constituent terms. Which hypothesis does the coefficient on father now test? What about the interaction term? Something strange has happened to the coefficient on female. Can you understand why?
+```{r}
+model_male = lm(childHeight ~ father + gender + father*gender, data=GaltonFamilies)
+summary(model_male)
+```
+Now the result is no longer statistically significant.
+
+
+Q3. One interpretation of the model you created above is that it estimates two separate regression slopes. Can you superimpose the two corresponding regression lines on the scatterplot?
+```{r}
+plot(GaltonFamilies$father, GaltonFamilies$childHeight)
+abline(model_fheight)
+abline(model_male)
+```
+
+Q4. Think carefully about this data set. Which one of the classical linear assumptions does it violate?
+
+There is high level of colinearity between female and male. 
+
+
+

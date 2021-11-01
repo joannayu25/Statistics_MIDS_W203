@@ -1,0 +1,140 @@
+---
+title: "Cancer Mortality Exploration"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This exploratory data analysis attempts to understand how county-level characteristics are related to cancer mortality.
+
+```{r}
+library(car)
+dfCancer <- read.csv('~/Documents/cancer.csv', stringsAsFactors = FALSE)
+dfCancer$CancerPer1000 <- (dfCancer$avgAnnCount / dfCancer$popEst2015) * 1000
+dfCancer$deathRate <- dfCancer$deathRate/100
+nrow(dfCancer)
+dfCancercln <- dfCancer[!(dfCancer$avgAnnCount == 1962.667684) 
+                        & dfCancer$MedianAge < 100
+                        & dfCancer$AvgHouseholdSize > 1, ]
+nrow(dfCancercln)
+str(dfCancercln)
+```
+
+We start by organizing the variables into the following categories and will take a deeper dive into each category.
+1) 2009-2013 mean incidences per county: avgAnnCount
+2) income related: MedIncome, povertyPercent
+3) population, age, gender: popEst2015, MedianAge, MedianAgeMale, MedianAgeFemale
+4) geographic: Geography
+5) household related: AvgHouseholdSize, PercentMarried, PctMarriedHouseholds
+6) education and age: PctNoHS18_24, PctHS18_24, PctSomeCol18_24, PctBachDeg18_24, PctHS25_Over, PctBachDeg25_Over
+7) employment status: PctEmployed16_Over, PctUnemployed16_Over
+8) insurance: PctPrivateCoverage, PctEmpPrivCoverage, PctPublicCoverage
+9) race: PctWhite, PctBlack, PctAsian, PctOtherRace
+10) birth and death: BirthRate, deathRate
+
+First, we create a histogram of the deathRate variable. It is slightly skewed.
+```{r cars}
+hist(dfCancercln$deathRate)
+```
+
+Next we will examine the relationship between the type of insurance people have and cancer mortality by doing a scatterplot matrix. We notice: 
+1) Cancer mortality is negatively correlated with private insurance coverage (PctPrivateCoverage and PctEmpPrivCoverage).
+2) Cancer mortality is positively correlated with public insurance coverage (PctPublicCoverage).
+3) As expected, percentage of people with public insurance is negatively correlated with the percentage of people with private insurance.
+There could be many reasons that cancer mortality is related to insurance. Possible reasons include 1) access to care is often more difficult with public insurance, which could mean less frequent preventative care. This potentially leads to more mortality if cancer is detected at a later stage. 2) cancer patients may choose to use public insurance programs for their treatment due to cost or job loss.
+
+```{r}
+scatterplotMatrix( ~ deathRate + PctPublicCoverage + PctPrivateCoverage + PctEmpPrivCoverage, 
+                   data = dfCancercln, diagonal = "histogram", main = "Scatterplot Matrix for Insurance Types")
+```
+```{r}
+scatterplotMatrix( ~ deathRate + PctPublicCoverage + PctPrivateCoverage + MedianAge, 
+                   data = dfCancercln, diagonal = "histogram", main = "Scatterplot Matrix for Insurance Types")
+```
+```{r}
+plot(dfCancercln$PctPrivateCoverage, dfCancercln$PctPublicCoverage, xlab = "Percent Privately Insured", ylab = "Percent Publicly Insured", main = "Public Insurance vs. Private Insurance")
+```
+
+We will now do boxplots to further examine the relationship between cancer mortality and insurance. Each insurance variable will be binned from 0 to 100% by increment of 2.5%. 
+```{r}
+PublicCoverage_bin = cut(dfCancercln$PctPublicCoverage, breaks = seq(0,100, by=2.5))
+boxplot(deathRate ~ PublicCoverage_bin, data = dfCancercln, xlab = "Percent of Publicly Insured", ylab = "Cancer Mortality", main = "Cancer Mortality for the Publicly Insured")
+```
+```{r}
+PrivateCoverage_bin = cut(dfCancercln$PctPrivateCoverage, breaks = seq(0,100, by=2.5))
+boxplot(deathRate ~ PrivateCoverage_bin, data = dfCancercln, xlab = "Percent of Privately Insured", ylab = "Cancer Mortality", main = "Cancer Mortality for the Privately Insured")
+```
+
+```{r}
+EmpPriv_bin = cut(dfCancercln$PctEmpPrivCoverage, breaks = seq(0,100, by=2.5))
+boxplot(deathRate ~ EmpPriv_bin, data = dfCancercln, xlab = "Percent of Privately Insured by Employer", ylab = "Cancer Mortality", main = "Cancer mortality for the Privately Insured by Employer")
+```
+The boxplots agree with what we observed from the scatterplots. However, there are quite a few outliers in both the publiclly insured and privately insured. 
+1) When the percentage of publiclly insured is at its lowest, we would expect relatively low cancer mortality given the positive correlation between the two variables. But cancer mortality is actually high at that point. 
+2) Likewise, we would expect cancer mortality to be high when the percentage of publiclly insured is at its highest. But cancer mortality is actually at its lowest.
+3) When the precentage of privately insured is at its lowest, we would expect relatively high cancer mortality, but it is not the case.
+
+We now attempt to look at the percentage of uninsured to help address these outliers. We assume that if someone does not have public or private insurance, he/she must be uninsured. But using such method yields many negative values. This means a fairly large part of the population has both public and private insurance. Here is the summary of the uninsured.
+```{r}
+PctUninsured = 100 - dfCancercln$PctPrivateCoverage - dfCancercln$PctPublicCoverage
+summary(PctUnInsured)
+```
+The introduction of the insured variable has helped addressed some of the outliers:
+1) When we examine the relationship between the publiclly insured and uninsured, we can see that when the percentage of publiclly insured is at its lowest, the percentage of uninsured is relatively high, which could explain the jump in cancer mortality.
+2) When the percentage of publiclly insured is at its highest, the percentage of uninsured is negative, meaning people have both public insurance and private insurance. This means they may not be using public insurance. 
+
+```{r}
+plot(PctUninsured, dfCancercln$PctPublicCoverage, xlab = "Percent Uninsured", ylab = "Percent Publicly Insured", main = "Public Insurance vs. No Insurance")
+```
+```{r}
+plot(dfCancercln$PctPublicCoverage, dfCancercln$PctPrivateCoverage, xlab = "Percent Publiclly Insured", ylab = "Percent Privately Insured", main = "Public Insurance vs. Private Insurance")
+```
+```{r}
+plot(PctUninsured, dfCancercln$deathRate, xlab = "Percent of Uninsured", ylab = "Cancer Mortality", main = "Cancer Mortality for the Uninsured")
+abline(lm(dfCancercln$deathRate ~ PctUninsured))
+```
+
+We will now look at the income variables. We start by a scatterplot matrix for cancer mortality, publiclly insured, and income variables. The variable for publicly insured is included because its potential relationship with income variables. As seen in the scatterplots, there is strong positive correlation between the percentage of publicly insurd and percentage of poverty. The poverty variable may also help explain the relationshiop between cancer mortality and the publicly insured. The positive correlation between cancer mortality and public insurance may be due to the fact that people living with low income or poverty are less likely to afford private insurance. The scatterplot matrix suggests a strong correlation between PctPublicCoverage and povertyPercent (0.65), a strong negative correlation between PctPublicCoverage and medIncome (-0.75). 
+
+```{r}
+scatterplotMatrix(~ deathRate + PctPublicCoverage + medIncome + povertyPercent, data = dfCancercln)
+```
+
+```{r}
+cor(dfCancercln$PctPublicCoverage, dfCancercln$povertyPercent, use = "complete.obs")
+```
+```{r}
+cor(dfCancercln$PctPublicCoverage, dfCancercln$medIncome, use = "complete.obs")
+```
+```{r}
+cor(dfCancercln$deathRate, dfCancercln$medIncome, use = "complete.obs")
+```
+
+
+Next we will explore the employment variables. However, since the percentage of employer provided private insurance is negatively correlated with cancer mortality, it is expected that the percentage of employed will have the same relationship. The following graphs confirm this.
+```{r}
+scatterplotMatrix(~ deathRate + PctEmployed16_Over + PctUnemployed16_Over, data = dfCancercln)
+```
+
+
+
+```{r}
+plot( dfCancercln$PctEmployed16_Over, dfCancercln$deathRate, xlab = "Percent of Employed", ylab = "Cancer Mortality", main = "Cancer Mortality for the Employed")
+abline(lm(dfCancercln$deathRate ~ dfCancercln$PctEmployed16_Over))
+```
+```{r}
+plot( dfCancercln$PctUnemployed16_Over, dfCancercln$deathRate, xlab = "Percent of Unemployed", ylab = "Cancer Mortality", main = "Cancer Mortality for the Unemployed")
+abline(lm(dfCancercln$deathRate ~ dfCancercln$PctUnemployed16_Over))
+```
+
+
+
+
+
+

@@ -1,0 +1,126 @@
+
+
+
+---
+title: "W203 Homework 4, Fall 2018 Tuesday 4pm"
+author: "Joanna Yu"
+date: "Oct 1, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1a) How much do you get paid if the coin comes up heads 3 times?
+
+There are 8 possible outcomes: 1 outcome with 3 heads, 3 outcomes with 2 heads, 3 outcomes with 1 head, 1 outcome with no heads. 
+Let W be the winnings from the game.
+$$
+\begin{aligned}
+E(W) &= 2*P(W=2)+4*P(W=4)+w*P(W=w)\\
+6 &= 2*{3\over8} + 4*{3\over8} + w*{1\over8}\\
+w &= 30\\
+\end{aligned} 
+$$
+1b) Write down a complete expression for the cumulative probability function for your winnings from the game.
+$$
+F(w) = \left\{
+        \begin{array}{ll}
+            1/8 & \quad 0 \leq w < 2 \\
+            1/2 & \quad 2 \leq w < 4 \\
+            7/8 & \quad 4 \leq w < 30 \\
+            1 & \quad 30 \leq w  \\ 
+        \end{array}
+    \right.\\
+$$
+2a) Write down a complete expression for the cumulative probability function of L. 
+$$
+f(l) = \left\{
+        \begin{array}{ll}
+            0 & \quad l\leq 0 \\
+            l/2 & \quad 0 < l \leq 2 \\
+            0 & \quad 2 < l \\
+        \end{array}
+    \right.\\
+$$
+$$
+\begin{aligned}
+F(l) &= \int_{-\infty}^{l} f(y) dy \\
+&= \int_{0}^{l} {y\over2}dy\\
+&={1\over4}y^2 \Big|_0^l \\
+&={l^2\over4}
+\end{aligned} \\
+$$
+$$
+F(l) = \left\{
+        \begin{array}{ll}
+            0 & \quad l\leq 0 \\
+            {l^2/4} & \quad 0 < l \leq 2 \\
+            1 & \quad 2 < l \\
+        \end{array}
+    \right.\\
+$$
+2b) Compute the expected length of the pasta, E(L).
+$$
+\begin{aligned}
+E(L) &= \int_{-\infty}^{\infty} l*f(l)dl \\
+  &=\int_{0}^{2}l*{l^2\over4} dl\\
+  &=\int_{0}^{2}{l^3\over4}dl\\
+  &=l^4\Big|_0^2\\
+  &=2^4\\
+  &=16\\  \\
+\end{aligned} 
+$$
+3a) Compute the expected payout from the contract, E(X)=E(g(T))
+$$
+\begin{aligned}
+E(X) &= E(g(T))\\
+&=\int_{-\infty}^{\infty} f(t)*g(t)dt \\
+  &=\int_{0}^{1}1*100(1-t)^{1/2}dt\\
+  &=100\int_{0}^{1}{(1-t)^{1/2}}dt\\
+  &=100({2\over3})(1-t)^{3/2}(-1)\Big|_0^1\\
+  &=100({2\over3})(0+1)\\
+  &=66{2\over3}  \\
+\end{aligned} \\
+$$
+3b) Compute E(X) another way
+$$
+\begin{aligned}
+g(X\leq x) \rightarrow  x &\geq 100(1-t)^{1/2}\\
+    t &\geq 1-({x\over100})^2 
+\end{aligned} \\ 
+$$
+$$
+\begin{aligned}
+P(X\leq x)= ({x\over100})^2\\
+pdf = d/dx(cdf)= x/5000 \\\\
+E(X)&=\int_{0}^{100} x*{x\over5000} dx\\
+&= {x^3\over15000}\big|_0^{100}\\
+&={100^3\over15000}\\
+&=66{2\over3}
+\end{aligned} \\ \\
+$$
+4a) Write down an expression for E(Y) and use properties of expectation to simplify it as much as you can. 
+$$
+\begin{aligned}
+Y= (X-t)^2 = X^2-2Xt+t^2\\
+f(y)= 2x-2t+t^2 \\
+E(Y) &= \int_{-\infty}^{\infty}x(2x-2t+t^2) dx \\
+&= \int_{-\infty}^{\infty} (2x^2 - 2tx +xt^2) dx \\
+\end{aligned} \\
+$$
+4b) Take a partial derivative with respect to t, compute the value of t that minimizes E(Y).
+$$
+(2x^2 - 2tx + xt^2)dt = 2x^2 - 2x+2xt \\
+$$
+E(Y) is minimized when t = 0
+
+4c) What is the value of E(Y) for this choice of t?
+$$
+E(Y) = 2X^2
+$$

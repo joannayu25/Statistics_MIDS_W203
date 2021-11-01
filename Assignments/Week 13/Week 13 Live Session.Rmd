@@ -1,0 +1,28 @@
+---
+title: "Week 13 Live Session"
+author: "Joanna Yu (W203 Tuesday 4pm Fall 2018)"
+date: "12/4/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+library(car)
+library(lmtest)
+library(sandwich)
+load("engin.RData")
+```{r}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

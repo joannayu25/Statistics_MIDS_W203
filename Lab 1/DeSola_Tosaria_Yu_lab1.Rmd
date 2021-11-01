@@ -1,0 +1,589 @@
+---
+title: "Cancer EDA"
+author: "Vinicio De Sola, Sam Tosaria, Joanna Yu"
+date: "September 25, 2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(expss)
+library(ggplot2)
+library(car)
+states <- map_data("state")
+usa <- map_data("usa")
+options(kableExtra.latex.load_packages = TRUE)
+library(kableExtra)
+dfCancer <- read.csv('cancer.csv', stringsAsFactors = FALSE)
+dfCancer <- separate(dfCancer,Geography,c('County','State'),sep=',')
+```
+
+#Introduction
+
+
+As members of the society, Cancer is still one of the most cryptic diseases known to man. In the US, it's the second most common cause of death [^1]. Thus, it is important to try to understand how it affects the population and explore if some relationships exist between the incidences of this disease, the related mortality rate and social variables like income, level of education, geography, insurance coverage, etc.
+
+For government agencies, these types of studies are important to help governments allocate resources in fighting these  diseases. In this report we analysize the county level data, and our target variable is mortality, expressed as **Death Rate** in the dataset. 
+
+We will start the study first by describing the dataset: quality of the data, transformations, and the data cleaning done to it. Second, we will describe the mortality at a high level to understand the overall effect of cancer in the US. Then, we will focus our attention on describing census type: age, race, gender,and population level. After that, we will concentrate our attention on social-economic variables: Income, study levels, insurance coverage, and employment status. 
+
+Our second step is to analyze relationships between the target variable and other key variables selected in this study. These will range from geographical maps to show concentrations of the diseases per state, to scatterplots and linear regressions between the key variables and mortality. This will give us a sense of what are the possible ways of alloacting resources in cancer research.
+
+
+[^1]:https://www.healthline.com/health/leading-causes-of-death
+
+## Data Description
+
+The data set includes 30 variables with 1 index variable and 27 other numeric variables that describe the various statistics of each county. The 2 remaining variables (binned income and county name) are factors. There are 3047 observations. 18 variables are expressed in percentages. The variables have been grouped by the following major categories: 
+\begin{center}
+Table 1: Data Description
+\end{center}
+No. | Category | Fields
+--- | ------------------- | ----------------------------------------------------
+1 | Cancer Incidences | avgAnnCount
+2 | Income | MedIncome, povertyPercent, binnedInc
+3 | Population, Age, Gender | popEst2015, MedianAge, MedianAgeMale, MedianAgeFemale 
+4 | Geographic | Geography
+5 | Household Related | AvgHouseholdSize, PercentMarried, PctMarriedHouseholds
+6 | Education and Age | PctNoHS18_24, PctHS18_24, PctSomeCol18_24, PctBachDeg18_24, PctHS25_Over, PctBachDeg25_Over
+7 | Employment Status | PctEmployed16_Over, PctUnemployed16_Over 
+8 | Insurance | PctPrivateCoverage, PctEmpPrivCoverage, PctPublicCoverage 
+9 | Race | PctWhite, PctBlack, PctAsian, PctOtherRace 
+10 | Birth and Death | BirthRate, deathRate
+
+The data descriptions for some of the variables seem incomplete and certain columns appears incongruous. The following section discusses the data quality issues and data transformations.
+
+## Data Transformation and Cleaning
+
+The birth rate in the raw data has a mean of 5.6, meanwhile the death rate has an average of 178.7. The divisors for these fields (per 1,000 or 10,000 or per 100,000 persons) are different. We corrected the divisor for these data points, arriving at the result through intuitive deduction.
+
+The global birth rate as per World Bank is 18.1 births per 1000 people [^2]. So an average of 5.6 for US per 1000 population is reasonable. Thus the divisor for birth rates must be one thousand. However the death rate needed to be reassessed and transformed. 
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("avgAnnCount",'BirthRate','deathRate')
+v_mean <- lapply(dfCancer[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancer[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancer[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancer[vars], median, na.rm=TRUE)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Mortality per County', 'Birth Rate', 'Death Rate')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Summary of key census data') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+Firstly, to check the data quality of the average annual cancer occurrences field ('avgAnnCount') we divided it by the estimated population of the county ('popEst2015'), creating a new field called 'CancerPer1000', post data cleaning (discused in the next section) the mean for the field is 5.5 cancer occurrences per 1000 population. This implies the death rate with a mean of 164 must be either per ten or hundred thousand of the population . 
+
+However, after dividing by 10 implies a mean or 16.4, it's still too high compared to cancer occurence rate of 5.5 per 1000, but dividing this by 100 would give us a mean of 1.64 deaths per 1000 population. Compared with the cancer occurrence rate of 5.6 per 1000 implying a death rate among cancer patients of ~30% is intuitively reasonable. Thus this field must be transformed by dividing it by 100 to get a consistent, comparable baseline.
+
+Additionally, using a one hundred thousand divisor for the cancer occurrences would over-amplify the effect of the large number of low cancer occurence counties in the data, as illustrated by the low median. Thus we chose the per 1000 of population divisor to counter this effect.
+
+[^2]:https://data.worldbank.org/indicator/SP.DYN.CBRT.IN?view=chart 
+
+Other varible with problems to use is someBach18-24. The amount of NAs (Not data recorded) is 2285 from 2755 available, thus is not reliable for use, and we discarded.
+
+Having assesed the quality of the data, we proceed to clean it. To clean the data, our first step is to check the influence of population on the data, because we have a huge range in the average mortality per county, and it could be explained by the skewness of the population distribution per county. 
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=12, fig.height=8}
+vars <- c("popEst2015")
+v_mean <- lapply(dfCancer[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancer[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancer[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancer[vars], median, na.rm=TRUE)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Population per County 2015')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Summary of County data') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+hist(log(dfCancer$popEst2015), main='Histogram of log County Population 2015',
+     xlab = '2015s population', ylab = 'Frequency', col = 'green')
+```
+
+We plotted the log of the variable, where the amount of skweness in the distribution (Median = 26,643; Mean = 102,637) is quite obvious. Thus, small counties are overrepresented in the dataset. Next, we want to check how age and gender relate to cancer mortality.
+
+```{r, echo=FALSE}
+dfCancer$CancerPer1000 <- (dfCancer$avgAnnCount / dfCancer$popEst2015) * 1000
+dfCancer$deathRate <- dfCancer$deathRate/100
+dfCancer$Tot18_24 <- (dfCancer$PctNoHS18_24
+                          + dfCancer$PctHS18_24
+                          + dfCancer$PctBachDeg18_24)
+dfCancer$PctSomeCol18_24_calc <- (100 - dfCancer$PctBachDeg18_24 
+                                     - dfCancer$PctHS18_24
+                                     - dfCancer$PctNoHS18_24)
+dfCancer$Tot25over <- (dfCancer$PctHS25_Over + dfCancer$PctBachDeg25_Over)
+setCancer <- c('avgAnnCount','popEst2015','CancerPer1000', 'deathRate')
+setAge <- c('MedianAge', 'MedianAgeMale', 'MedianAgeFemale')
+setHousehold <- c('AvgHouseholdSize', 'PercentMarried', 'PctMarriedHouseholds')
+setEd <- c('PctNoHS18_24', 'PctHS18_24', 'PctSomeCol18_24','PctSomeCol18_24_calc',
+           'PctBachDeg18_24', 'Tot18_24','PctHS25_Over', 'PctBachDeg25_Over')
+dfAge <- dfCancer[, c(setCancer, setAge)]
+kable(summary(dfAge), booktabs=T, digits = 3,
+        caption = 'Data check of Age, Gender and Mortality') %>%
+        kable_styling(latex_options=c('scale_down','hold_position'),
+                      position = 'center')
+dfcheckCount <- dfAge[dfAge$CancerPer1000 > 10, ]
+dfcheckPop <- dfCancer[dfCancer$popEst2015 > 1000000, ]
+dfOutlier <- data.frame(count(dfcheckCount, 'avgAnnCount'))
+dfcheckAge <- dfAge[dfAge$MedianAge > 66, ]
+dfcheckAge$MedianAge <- (dfcheckAge$MedianAgeMale + dfcheckAge$MedianAgeFemale)/2
+```
+
+The total sum of average annual cancer occurrences is 1.847 million. This data observed against the national US population of 330 million implies a 0.56% national cancer occurrence rate. Observing the outlier data in the 'CancerPer1000' field using a threshold of counties showing cancer counts above 1% of the population, there were 198 entries with seemingly dubious average annual cancer occurrences. Of these entries 196 had the exact same data point of 1962.668 producing double and triple digit cancer counts as a percentage of the county population. This data appeared to be an anomaly, thus it was excluded from the analysis.
+The MedianAge data contained 30 entries with county median age of over 100, logically this appears to be incorrect, so we also omitted these records from the study.
+
+The household size data for 6 counties was very close to zero, this appears to be incorrect data as well, hence we excluded these entries from the analysis as well. 
+
+```{r, echo=FALSE}
+dfHousehold <- dfCancer[, c(setHousehold)]
+kable(summary(dfHousehold), booktabs=T, digits = 3,
+        caption = 'Data check of Household') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+dfCancercln <- dfCancer[!(dfCancer$avgAnnCount == 1962.667684) 
+                        & dfCancer$MedianAge < 100
+                        & dfCancer$AvgHouseholdSize > 1, ]
+```
+
+
+Therefore, our final dataset will not have any of the outliers that we explained before, in the process of cleaning we lost 292 data points, or 9.5% of the raw data. Although the number is not insignificant, it will not skew the Eploratory Analysis.
+
+#Univariate Analysis of Key Variables
+
+In this part of the report, we will describe the key variables which may help in policy decisionmaking. In this section we will contune to build upon the analysis started in the previous data cleaning section.
+
+### Death Rate (Target variable)
+
+Let's start with the target variable, mortality by  observing the summary statistics of this variable from our clean dataset.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("deathRate")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Death Rate')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Mortality of Cancer') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+This distribution seems to be symmetric (Median and Mean are very close to each other). Also, the standard deviation is only 15% of the mean, which mean the distribution should have low levels of kurtosis. Let's graph a histogram and a boxplot of the variable to check the distribuion. As explained in the cleaning section, we are working with deaths per 1000 of population.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$deathRate, main='Histogram of Mortality',
+     xlab = 'Death Rate', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$deathRate, main='Boxplot of Mortality',
+     xlab = 'Death Rate')
+kable(dfCancercln[dfCancercln$deathRate==max(dfCancercln$deathRate),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Higher Outlier') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+As expected from the summary statistics, the distribution is symmetric, almost normal, with low skewness. The box plot doesn't show too many outliers, in fact only one, the maximum value with a mortality rate of 36.28. This outlier is Union County, located in Florida. This outlier is important for us to understand why, because it could mean a potential carcinogen is in that environment, or other exogeneous circumstances. 
+
+### Median Income
+
+Our first independent variable to analyze is Median Income. Now that we have a clean dataset, we can proceed to summarize this variable.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("medIncome")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Median Income')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Median Income') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+This is a more skewed variable, with a higher mean that the median. Also, it's quite dispersed, with a high standard deviation of 12K$. This is an important variable in general in terms of socioeconomic impact, thus let's plot the histogram so we can get a better sense of the shape of the distribution.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$medIncome, main='Histogram of Median Income',
+     xlab = '$', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$medIncome, main='Boxplot of Median Income',
+     xlab = '$')
+kable(dfCancercln[dfCancercln$medIncome==max(dfCancercln$medIncome),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Higher Outlier') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+kable(dfCancercln[dfCancercln$medIncome==min(dfCancercln$medIncome),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Lowest Median Income') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+As expected, the distribution is quite skewed to the left, with several outliers in the right tail. The richest county is located in Virginia, called Falls Church City. This type of information is important for Goverment agencies to determine inequality problems and better allocation of welfare resources. The poorest County is locate in Mississippi, and it's called Holmes County.
+
+### Household Size
+
+Our second important variable to describe, is the average household size. This is important for density calculation and to check if mortality is related to loneliness, which could shed more light on socia programs those segments of the population.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("AvgHouseholdSize")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Household Size')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Household Size') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+This distribution seems to be symmetric (Median and Mean are very close to each other). Also, the standard deviation is only 10% of the mean, which mean the distribution should have low levels of kurtosis. Let's graph a histogram and a boxplot of the variable to check the distribuion. It is important to take into consideration, this variable is an average, thus it's expected to have less volatility if the Central Limit Theorem is valid for this data.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$AvgHouseholdSize, main='Histogram of Average Household Size',
+     xlab = 'Size', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$AvgHouseholdSize, main='Boxplot of Average Household Size',
+     xlab = 'Size')
+kable(dfCancercln[dfCancercln$AvgHouseholdSize==max(dfCancercln$AvgHouseholdSize),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Higher Outlier') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+kable(dfCancercln[dfCancercln$AvgHouseholdSize==min(dfCancercln$AvgHouseholdSize),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Lowest Household Size County') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+The histogram showed a different story. The distribution has a small left skewness and a fat right tail. There are two Counties with the largest household size (in average): McKinley County in New Mexico and McKinley County in Alaska. The lowest household size County is Forest County in Pennsylvania.
+
+### Poverty line
+
+Let's now focus our attention on the poverty line variable. This variable is the percentage of people in the county living below the poverty line. Again, an important socioeconomic variable for allocation of welfare resources. Let's start with the summary statistics.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("povertyPercent")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Poverty Percent')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Poverty Line') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+it seems to have the same skew as the median income variable. Also, we can identify a quite high maximum value of almost 50%, which means presence of a very poor county in the dataset, compared to a quite low minimum value of 3%, a very rich county. This could help the allocation of resources for decreasing the inequality and possibly the political divisions in the country. Let's take a look at the distribution.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$povertyPercent, main='Histogram of poverty Line',
+     xlab = '%', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$povertyPercent, main='Boxplot of poverty Line',
+     xlab = '%')
+kable(dfCancercln[dfCancercln$povertyPercent==max(dfCancercln$povertyPercent),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Poorest County') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+kable(dfCancercln[dfCancercln$povertyPercent==min(dfCancercln$povertyPercent),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Richest County') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+No surprises in the shape of the distribution, it is similar to the distribution of the median income. The poorest county is Todd COunty in South Dakota, and the county with least people below the poverty line is Falls Church City, which also has the highest median income, as mentioned earlier. 
+
+### Employment Status
+
+The last 2 variables that we are going to analyze as key variables are all percentages: employment status of people over 16 and public insurance coverage. These are key socioeconomic and census variables that help localize sources of problems for goverment agencies. In our case, in the next section, we want to explore if these variables have an effect on the cancer related mortality rate. Let's start with employment.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("PctEmployed16_Over")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('Employment Percent')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Employment Percent') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$PctEmployed16_Over, main='Histogram of % of Employment over 16',
+     xlab = '%', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$PctEmployed16_Over, main='Boxplot of % of Employment over 16',
+     xlab = '%')
+#sum(is.na(dfCancercln$PctEmployed16_Over))
+```
+Is important to state that in this case that the amount of NAs is quite high (134), so this variable have to be treated with care for any of the subsequent explorations.
+
+### Insurance Status
+
+Of all the insurance related variables, the one that we care the most about is the coverage by Public agencies or programs, such as Medicaid and Medicare. This is important for tax, political purposes, and of course, cancer related mortality, since cancer is one of the most cost intensive diseases.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE}
+vars <- c("PctPublicCoverage")
+v_mean <- lapply(dfCancercln[vars], mean, na.rm=TRUE)
+v_mean <- round(as.numeric(v_mean), 2)
+v_min <- lapply(dfCancercln[vars], min, na.rm=TRUE)
+v_max <- lapply(dfCancercln[vars], max, na.rm=TRUE)
+v_med <- lapply(dfCancercln[vars], median, na.rm=TRUE)
+v_sd <- lapply(dfCancercln[vars], sd, na.rm=TRUE)
+v_sd <- round(as.numeric(v_sd), 2)
+v_tab <- cbind(Mean=v_mean, Median=v_med, Sd= v_sd, Min=v_min, Max=v_max)
+rownames(v_tab) <- c('% of Public Coverage')
+kable(v_tab, booktabs=T, digits = 3,
+        caption = 'Perc of Public Coverage') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+hist(dfCancercln$PctPublicCoverage, main='Histogram of public Coverage',
+     xlab = '%', ylab = 'Frequency', col = 'green')
+boxplot(dfCancercln$PctPublicCoverage, main='Boxplot of public Coverage',
+     xlab = '%')
+kable(dfCancercln[dfCancercln$PctPublicCoverage==max(dfCancercln$PctPublicCoverage),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Highest Public Coverage') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+kable(dfCancercln[dfCancercln$PctPublicCoverage==min(dfCancercln$PctPublicCoverage),
+                  c('County','State')], booktabs=T, digits = 3,
+        caption = 'Lowest Public Coverage') %>%
+        kable_styling(latex_options='hold_position',position = 'center')
+```
+
+This is quite a symmetric distribution. The county with the highest public insurance coverage is Sumter County in Florida, and the least publically covered county is Aleutians West Census Area in Alaska. 
+
+
+#Analysis of Key Relationships & Secundary Effects
+
+After individually describing each of the most important variables, is time to explore the possible relationships that could exist between these variables and our target variable the death rate. As stated before, this is just an exploratory analysis, where we won't model or infer any statistical relationship, but it will help to guide us in further analysis or studies.
+
+##Death Rate vs. Cancer Occurrences
+
+Let's first assess our introduced variable (occurrences of cancer), vs cancer mortality. This is a great way to start the analyis, because it will give us a sense of probability of recovery if the person is diagnosed with the disease.
+
+```{r, include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5 }
+setCancer <- c('avgAnnCount','popEst2015','CancerPer1000', 'deathRate')
+setAge <- c('MedianAge', 'MedianAgeMale', 'MedianAgeFemale')
+setHousehold <- c('AvgHouseholdSize', 'PercentMarried', 'PctMarriedHouseholds')
+setEd <- c('PctNoHS18_24', 'PctHS18_24', 'PctSomeCol18_24','PctSomeCol18_24_calc', 
+           'PctBachDeg18_24', 'Tot18_24','PctHS25_Over', 'PctBachDeg25_Over')
+dfAgeEDA <- dfCancercln[, c(setCancer, setAge)]
+#scatterplotMatrix(~deathRate +CancerPer1000 + MedianAge + MedianAgeMale + MedianAgeFemale, 
+                  #data=dfAgeEDA, main="Scatter Plot - Cancer Mortality - Age")
+plot(x=dfAgeEDA$CancerPer1000, y=dfAgeEDA$deathRate,
+     ylab = 'Cancer related death rate (per 1000)', xlab = 'Cancer occurence (per 1000)',
+     main = 'Cancer prevelance and related mortality rate')
+abline(lm( dfAgeEDA$deathRate ~ dfAgeEDA$CancerPer1000))
+ImpCor <- cor(dfAgeEDA$deathRate , dfAgeEDA$CancerPer1000)
+```
+The two are related with a positive correlation of ~30%, as one would expect. As observed in the analysis section there are a confluence of factors influencing the cancer outcomes such as lifestyle, education, income and strong underlying relations between those factors. Thus it is hard to definitively attribute only a few underlying factors to cancer occurence and mortality.
+ 
+
+##Death Rate vs. Socio Economic Variables
+### Income
+Let's start with Median Income, the most important socioeconomic variable.
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5 }
+plot(y= dfCancercln$deathRate, x=dfCancercln$medIncome, 
+     ylab = 'Cancer related death rate (per 1000)', xlab = 'Median Income',
+     main = 'Cancer mortality and Marital status')
+abline(lm(dfCancercln$deathRate ~ dfCancercln$medIncome))
+ImpCor <- c(ImpCor,cor(dfCancercln$deathRate , dfCancercln$medIncome))
+```
+
+The relationship is quite linear, especially as households with higher income income may have more access to medicines, healtcare, better diet, less stress, etc.  
+
+### Marital Status and Household Size
+
+Now let's check the relationship between marital status and mortality.
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5 }
+scatterplotMatrix(~deathRate + CancerPer1000 + AvgHouseholdSize + PercentMarried + PctMarriedHouseholds, 
+                  data=dfCancercln, main="Scatter Plot - Cancer Mortality - Households")
+plot(y= dfCancercln$deathRate, x=dfCancercln$PercentMarried, 
+     ylab = 'Cancer related death rate (per 1000)', xlab = '%age of married population',
+     main = 'Cancer mortality and Marital status')
+abline(lm(dfCancercln$deathRate ~dfCancercln$PercentMarried))
+dfEdEDA <- dfCancercln[ , c(setCancer, setEd)]
+dfEdEDA$PercentMarried_bin <- cut(dfCancercln$PercentMarried, breaks = seq(20,80,by=2))
+boxplot(deathRate ~ PercentMarried_bin , data=dfEdEDA, 
+        xlab = '%age with bachelors degree (over 25 years age)',
+        ylab = 'cancer mortality rate',
+        main = 'Boxplot - Cancer mortality and Marital status')
+ImpCor <- c(ImpCor,cor(dfCancercln$PercentMarried , dfCancercln$deathRate))
+```
+
+Marital status has a positive correlation with the average occurrence of cancer in the population, though this may be due to the age effect, since counties with more adults and a higher median age would also have more married people.
+
+But looking at the death rate and the marital status it appears the counties with higher number of married population exhibit a lower cancer mortality rate with a negative correlation of -0.257
+
+Observing the boxplot of the cancer mortality rate and the marital status of the population, the effect of negative correlation of the death rate with the marital status is even more pronounced for the population between the ages of 58 and 68. This may be due to multiplicity of factors such as better lifestyle, and higher survival rates among those couples. Thus this factor my be skewing the resulting analysis.
+
+### Education 
+
+Now let's see the effect of education in mortality. All of these variables may be linked to the first one, median income.
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+scatterplotMatrix(~deathRate + CancerPer1000 + PctHS25_Over + PctBachDeg25_Over, 
+                  data=dfEdEDA, main="Scatter Plot - Cancer Mortality - Education (over 25)")
+scatterplotMatrix(~deathRate + CancerPer1000 + PctNoHS18_24 + PctHS18_24 + PctSomeCol18_24_calc + PctBachDeg18_24, 
+                  data=dfEdEDA, main="Scatter Plot - Cancer Mortality - Education (18 - 24)")
+plot(y=dfEdEDA$deathRate, x=dfEdEDA$PctBachDeg25_Over,
+     ylab = 'Cancer related death rate (per 1000)', xlab = '%age of pop. w Bachelor deg(over 25)',
+     main = 'Cancer Mortality Rate and Post Secondary Education')
+abline(lm( dfEdEDA$deathRate~dfEdEDA$PctBachDeg25_Over))
+```
+
+Plotting the cancer mortality rate alongwith the percentage of population over 25 holding a bachelor's degree illustrates a lower cancer mortality rate among county populations with higher percentage of the population over 25 years of age holding a bachelor's degree. Though this may be due to the same individuals having a higher income level and thus access to better healthcare as well.
+
+### Insurance
+
+Next we will examine the relationship between the type of insurance people have and cancer mortality by doing a scatterplot matrix. We notice: 
+
+1. Cancer mortality is negatively correlated with private insurance coverage (PctPrivateCoverage and PctEmpPrivCoverage).
+2. Cancer mortality is positively correlated with public insurance coverage (PctPublicCoverage).
+3. As expected, the percentage of people with public insurance is negatively correlated with the percentage of people with private insurance.
+
+There could be many reasons that cancer mortality is related to insurance. Possible reasons include 1) access to care is often more difficult through public insurance, which could mean less frequent preventative care. This potentially leads to higher mortality if cancer is detected at a later stage. 2) cancer patients may choose to use public insurance programs for their treatment due to the high cost or job loss.
+
+We will now do boxplots to further examine the relationship between cancer mortality and insurance. Each insurance variable will be binned from 0 to 100% by increment of 2.5%
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+scatterplotMatrix( ~ deathRate + PctPublicCoverage + 
+                       PctPrivateCoverage + PctEmpPrivCoverage, 
+                   data = dfCancercln, diagonal = "histogram", 
+                   main = "Scatterplot Matrix for Insurance Types")
+plot(dfCancercln$PctPrivateCoverage, dfCancercln$PctPublicCoverage, 
+     xlab = "Percent Privately Insured", ylab = "Percent Publicly Insured", 
+     main = "Public Insurance vs. Private Insurance")
+PublicCoverage_bin = cut(dfCancercln$PctPublicCoverage, breaks = seq(0,100, by=2.5))
+boxplot(deathRate ~ PublicCoverage_bin, data = dfCancercln, 
+        xlab = "Percent of Publicly Insured", 
+        ylab = "Cancer Mortality", 
+        main = "Cancer Mortality for the Publicly Insured")
+EmpPriv_bin = cut(dfCancercln$PctEmpPrivCoverage, breaks = seq(0,100, by=2.5))
+boxplot(deathRate ~ EmpPriv_bin, data = dfCancercln, 
+        xlab = "Percent of Privately Insured by Employer", 
+        ylab = "Cancer Mortality", 
+        main = "Cancer mortality for the Privately Insured by Employer")
+```
+
+The boxplots agree with what we observed from the scatterplots. However, there are quite a few outliers in both the publically insured and privately insured. 
+
+1. When the percentage of publiclly insured is at its lowest, we would expect relatively low cancer mortality given the positive correlation between the two variables. But cancer mortality is actually high at that point. 
+2. Likewise, we would expect cancer mortality to be high when the percentage of publiclly insured is at its highest. But cancer mortality is actually at its lowest.
+3. 3. When the percentage of privately insured is at its lowest, we would expect relatively high cancer mortality, but it is not the case.
+
+We now attempt to look at the percentage of uninsured to help address these outliers. We assume that if someone does not have public or private insurance, he/she must be uninsured. We create the uninsured variable by subtracting the percentage of publically insured and privately insured from 100%. But using such method yields many negative values. This means a fairly large part of the population has both public and private insurance. Here is the summary of the uninsured.
+
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+PctUninsured <- 100 - dfCancercln$PctPrivateCoverage - dfCancercln$PctPublicCoverage
+summary(PctUninsured)
+ImpCor <- c(ImpCor,cor(dfCancercln$PctPublicCoverage, 
+                       dfCancercln$povertyPercent, use = "complete.obs"))
+ImpCor <- c(ImpCor, cor(dfCancercln$PctPublicCoverage, 
+                        dfCancercln$povertyPercent, use = "complete.obs"))
+ImpCor <- c(ImpCor,cor(dfCancercln$PctPublicCoverage, 
+                       dfCancercln$medIncome, use = "complete.obs"))
+ImpCor <- c(ImpCor,cor(dfCancercln$deathRate, 
+                       dfCancercln$medIncome, use = "complete.obs"))
+```
+
+
+The introduction of the insured variable has helped addressed some of the outliers:
+
+1. When we examine the relationship between the publically insured and uninsured, we can see that when the percentage of publically insured population is at its lowest, the percentage of uninsured is relatively high, which could explain the jump in cancer mortality.
+2. When the percentage of publically insured population is at its highest, the percentage of uninsured is negative, meaning people have both public insurance and private insurance. This means they may not be using the public insurance. 
+
+Let's now check income with insurance, to study the relationships of secondary effects between variables. At the end, it seems plausible that mortality is more a sum of many variables, rather than an individual factor. We will now look at the income variables. We start by a scatterplot matrix of cancer mortality rate, publically insured population, and income variables. The variable for publically insured population is included because its potential relationship with income variables. As seen in the scatterplots, there is strong positive correlation between the percentage of publically insured and percentage of poverty. The poverty variable may also help explain the relationshiop between cancer mortality and the publically insured population. The positive correlation between cancer mortality and public insurance uptake may be due to the fact that people living with low income or poverty are less likely to be able toafford private insurance. The scatterplot matrix suggests a strong correlation between PctPublicCoverage and povertyPercent (0.65), and a strong negative correlation between PctPublicCoverage and medIncome (-0.75).
+
+## Geography
+
+Our final key relationship to analyze is the geographical data. Where is major concentrations of mortality? This will help any regulatory body to concentrate efforts and resources if one area of the country in particular have a higher mortality rates than others.
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+dfCancerByState <- aggregate(deathRate~State,data = dfCancercln,mean,na.rm=TRUE)
+top15stateCancer <- top_n(dfCancerByState,15,deathRate)
+top15stateCancer <- top15stateCancer[order(-top15stateCancer$deathRate),]
+kable(top15stateCancer, booktabs=T,
+        caption = 'Top 15 States by Cancer Mortality') %>%
+        kable_styling(latex_options='hold_position', position = 'center')
+TopStates <- top15stateCancer$State
+TopStates <- gsub(' ','', tolower(TopStates), fixed = TRUE)
+TopStates[11] <- 'south carolina'
+statesTop <- subset(states, region %in% TopStates)
+g <- ggplot(data = statesTop) + 
+     geom_polygon(data = usa, aes(x=long, y = lat, group = group), 
+                 fill = NA, color = "black") + coord_fixed(1.3) + 
+     geom_polygon(aes(x = long, y = lat, fill = region, group = group), 
+                 color = "white") + coord_fixed(1.3) + guides(fill=FALSE)
+g + theme_minimal()+ggtitle('Top 15 States by mortality')
+```
+
+We observe a distinct region of the US where mortality is higher, the South East of the country. This is quite important information for the government and related agencies. This will allow them to assess the allocation of resources and check if there is exogenous environmental variables in that region that could be affecting the cancer mortality rates. 
+
+Let's now get the bottom 15 States in terms of mortality.
+
+```{r include=TRUE, comment=NA, warning=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+bot15stateCancer <- top_n(dfCancerByState,-15,deathRate)
+bot15stateCancer <- bot15stateCancer[order(-bot15stateCancer$deathRate),]
+kable(bot15stateCancer, booktabs=T,
+        caption = 'Top 15 States by Cancer Mortality') %>%
+        kable_styling(latex_options='hold_position', position = 'center')
+BotStates <- bot15stateCancer$State
+BotStates <- gsub(' ','', tolower(BotStates), fixed = TRUE)
+BotStates[1] <- 'rhode island'
+BotStates[4] <- 'south dakota'
+BotStates[6] <- 'north dakota'
+BotStates[10] <- 'new mexico'
+statesBot <- subset(states, region %in% BotStates)
+g <- ggplot(data = statesBot) + 
+     geom_polygon(data = usa, aes(x=long, y = lat, group = group), 
+                 fill = NA, color = "black") + coord_fixed(1.3) + 
+     geom_polygon(aes(x = long, y = lat, fill = region, group = group), 
+                 color = "white") + coord_fixed(1.3) + guides(fill=FALSE)
+g + theme_minimal()+ggtitle('Bottom 15 States by mortality')
+```
+
+Now the region is also quite clear. The North West Region has the lower cancer mortality. Again, it'll be interisting to see if this can be linked to some environmental or socioeconomic results, because of how concentrated the regions are.
+
+
+# Conclusion
+
+Looking at the education and marital status data the government should encourage more of the population to seek higher education and also encourage more cohabitation among the population as both categories exhibit negative correlation with cancer mortality rates.
+
+From the insurance, employment, and income data perspective, the government may be able to reduce the cancer mortality rates by 1) improving the public healthcare system; 2) maintaining low unemployment; 3) addressing the issue of poverty. 
+
+Since cancer mortality rate is negatively correlated with the percentage of population which is privately insured, and positively correlated with the percentage of population that is publically insured, it is possible that the cancer patients can get better quality of care or better access to care from private insurance. The government can work on improving the public healthcare system to help reduce cancer mortality. In addition the governments should also considering reforming the insurance industry and incentivizing the private insurance companies to offer broader insurance programs, such that people with higher healthcare needs or sickness are able to access healthcare and are able to have more choices rather than be force to only use only the public insurance options provided by the governments.
+
+Since many employers provide private insurance, maintaining low unemployment rate would also help maintain a higher rate of private insurance coverage among the population, alleviating the burden from the public healthcare system. 
+
+People living in poverty are more likely to be susceptible to cancer mortality because they may not have the time or resources to access good preventive care. The government can create more outreach programs aimed at offering convenient preventive services at local communities. Improved and  continuous wellness monitoring can lead to better treatment when cancer cab be detected early.
+

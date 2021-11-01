@@ -1,0 +1,61 @@
+---
+title: "Unit 9 Pre-Class Warm-Up"
+author: "Joanna Yu (Tuesday 4pm Fall 2018)"
+date: "10/29/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Q1. Is there a difference between the amount of money a senator raises and the amount spent?
+
+Q1.1. Are the assumptions for a t-test met?
+
+Yes, if we are looking at the difference bewteen the amount raised and spent, each random variable is identically distributed and independent. The distributions should be normal. 
+
+$\\$
+Q1.2. Is a paired test or an unpaired test more appropriate?
+
+The paired test is more appropriate because we are trying to compare the difference for each senator. 
+$\\$
+
+Q1.3. 
+
+```{r}
+senator = read.csv("united_states_senate_2014_v2.csv")
+summary(senator)
+```
+
+Q2. Do female Democratic senators raise more or less money than female Republican senators?
+
+Q2.1. Are the assumptions for a t-test met?
+
+Yes, the female Democratic senators and female Republican senators should be identically distributed and independent. The distributions should be normal. 
+
+$\\$
+Q2.2. Is a paired test or an unpaired test more appropriate?
+An unpaired test is more appropriate because we are comparing the amount of money raised across two different groups of females.
+
+$\\$
+
+```{r}
+```
+
+
+Q3. Does the NRA prefer male senators or female senators?
+
+Q2.1. Are the assumptions for a t-test met?
+
+Yes, the NRA ratings for male and NRA ratings for female should be identically distributed and independent. The distributions should be normal.
+
+$\\$
+Q2.2. Is a paired test or an unpaired test more appropriate?
+An unpaired test is more appropriate because we are comparing the NRA ratings between the two genders.
+
+$\\$
+
+```{r}
+```
+
