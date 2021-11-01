@@ -1,6 +1,8 @@
-# Reducing Crime
-Vinicio De Sola, Sam Tosaria, Joanna Yu 
+# Reducing Crime - Final Project (Statistics for Data Science)
+Joanna Yu, Vinicio De Sola, Sam Tosaria
+
 W203 Tuesday 4pm Fall 2018
+
 12/11/2018
 
 ## Introduction
@@ -28,4 +30,4 @@ No. | Category | Fields
 Our final dataset contains 90 observations and 25 variables. In North Carolina, there is a total of 100 counties, thus our dataset covers 90% of all North Carolina. We must assume that the counties not included were selected at random, so our dataset is built from a random sample. If not, we know that there will be some biases in our results.
 
 ## Modeling Process and Conclusion
-Please see [paper](/DeSola_Tosaria_Yu_lab3_Final.pdf)
+Please see [paper](./DeSola_Tosaria_Yu_lab3_Final.pdf).
